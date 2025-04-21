@@ -5,6 +5,10 @@
     "idf.openOcdConfigs": [
         "board/esp32c3-builtin.cfg"
     ],
-    "idf.port": "/dev/ttyS0",
-    "idf.toolsPath": "/home/vectorcs/.espressif"
+    "idf.port": "/dev/ttyACM0",
+    "idf.toolsPath": "/home/vectorcs/.espressif",
+    "idf.flashType": "JTAG",
+    "idf.customExtraVars": {
+        "IDF_TARGET": "esp32c3"
+    }
 }
