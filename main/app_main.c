@@ -17,12 +17,15 @@
 #include "esp_event.h"
 #include "esp_netif.h"
 #include "protocol_examples_common.h"
+#include "driver/gpio.h"
+#include <unistd.h>
 
 #include "esp_log.h"
 #include "mqtt_client.h"
 
 static const char *TAG = "mqtt_example";
-
+const int PresenceSensor = 2;
+const int LED = 5;
 
 static void log_error_if_nonzero(const char *message, int error_code)
 {
@@ -30,6 +33,24 @@ static void log_error_if_nonzero(const char *message, int error_code)
         ESP_LOGE(TAG, "Last error %s: 0x%x", message, error_code);
     }
 }
+
+static void configure_sensor(void)
+{
+    ESP_LOGI(TAG, "Example configured to blink GPIO LED!");
+    gpio_set_level(PresenceSensor, 0);
+    /* Set the GPIO as a push/pull output */
+    gpio_set_direction(PresenceSensor, GPIO_MODE_INPUT);
+}
+
+static void configure_led(void)
+{
+    ESP_LOGI(TAG, "Example configured to blink GPIO LED!");
+    gpio_reset_pin(LED);
+    gpio_set_level(LED, 0);
+    /* Set the GPIO as a push/pull output */
+    gpio_set_direction(LED, GPIO_MODE_OUTPUT);
+}
+
 
 /*
  * @brief Event handler registered to receive MQTT events
@@ -139,8 +160,36 @@ void app_main(void)
     ESP_LOGI(TAG, "[APP] Startup..");
     ESP_LOGI(TAG, "[APP] Free memory: %" PRIu32 " bytes", esp_get_free_heap_size());
     ESP_LOGI(TAG, "[APP] IDF version: %s", esp_get_idf_version());
-
-    esp_log_level_set("*", ESP_LOG_INFO);
+    configure_sensor();
+    configure_led();
+    bool Alert = false;
+    ESP_LOGI(TAG, "GPIO %d configured as input", PresenceSensor);
+    while (true)
+    {    
+        if(!Alert)
+        {
+        int level = gpio_get_level(PresenceSensor);
+        printf("SENSOR PRESENCIA = %d\n", level);
+        if(level == 1){
+            ESP_LOGI(TAG, "PRESENCE DETECTED");
+            Alert = true;
+        }
+        else{
+            ESP_LOGI(TAG, "NO PRESENCE DETECTED");
+        }
+        }
+        else{
+            gpio_set_level(LED,1);
+            printf("LED FLASH ON\n");
+            usleep(1000000);
+            gpio_set_level(LED,0);
+            printf("LED FLASH OFF\n");
+            usleep(1000000);
+            ESP_LOGI(TAG, "LED FLASH");
+        }
+    }
+    
+    /*esp_log_level_set("*", ESP_LOG_INFO);
     esp_log_level_set("mqtt_client", ESP_LOG_VERBOSE);
     esp_log_level_set("mqtt_example", ESP_LOG_VERBOSE);
     esp_log_level_set("transport_base", ESP_LOG_VERBOSE);
@@ -152,11 +201,11 @@ void app_main(void)
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
 
-    /* This helper function configures Wi-Fi or Ethernet, as selected in menuconfig.
-     * Read "Establishing Wi-Fi or Ethernet Connection" section in
-     * examples/protocols/README.md for more information about this function.
-     */
+    //This helper function configures Wi-Fi or Ethernet, as selected in menuconfig.
+    //Read "Establishing Wi-Fi or Ethernet Connection" section in
+    //examples/protocols/README.md for more information about this function.
+     
     ESP_ERROR_CHECK(example_connect());
 
-    mqtt_app_start();
+    mqtt_app_start();*/
 }
