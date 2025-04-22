@@ -34,14 +34,31 @@ static void log_error_if_nonzero(const char *message, int error_code)
     }
 }
 
+
+#include "driver/adc.h"
+#include "esp_log.h"
+
+#define SENSOR_CHANNEL ADC1_CHANNEL_2  // GPIO36 (VP), por ejemplo
+#define ADC_ATTEN ADC_ATTEN_DB_11      // Para leer hasta ~3.6V
+#define ADC_WIDTH ADC_WIDTH_BIT_12     // Resolución de 12 bits (0-4095)
+
+static void configure_sensor(void)
+{
+    ESP_LOGI(TAG, "Configurando sensor analógico de proximidad...");
+
+    // Configura el canal del ADC
+    adc1_config_width(ADC_WIDTH);
+    adc1_config_channel_atten(SENSOR_CHANNEL, ADC_ATTEN);
+}
+/*
 static void configure_sensor(void)
 {
     ESP_LOGI(TAG, "Example configured to blink GPIO LED!");
     gpio_set_level(PresenceSensor, 0);
-    /* Set the GPIO as a push/pull output */
+    //Set the GPIO as a push/pull output 
     gpio_set_direction(PresenceSensor, GPIO_MODE_INPUT);
 }
-
+*/
 static void configure_led(void)
 {
     ESP_LOGI(TAG, "Example configured to blink GPIO LED!");
@@ -166,7 +183,20 @@ void app_main(void)
     ESP_LOGI(TAG, "GPIO %d configured as input", PresenceSensor);
     while (true)
     {    
-        if(!Alert)
+
+        int analog_value = adc1_get_raw(SENSOR_CHANNEL);
+        printf("Lectura analógica del sensor: %d\n", analog_value);
+    
+        if (analog_value > 1000) {  // Umbral de proximidad, puedes calibrarlo
+            ESP_LOGI(TAG, "PRESENCIA DETECTADA");
+            Alert = true;
+        } else {
+            Alert = false;
+        }
+    
+        // Si la lectura es mayor que el umbral, enciende el LE
+        /*
+        if(!Alert || true)
         {
         int level = gpio_get_level(PresenceSensor);
         printf("SENSOR PRESENCIA = %d\n", level);
@@ -177,7 +207,8 @@ void app_main(void)
         else{
             ESP_LOGI(TAG, "NO PRESENCE DETECTED");
         }
-        }
+        }*/
+        /*
         else{
             gpio_set_level(LED,1);
             printf("LED FLASH ON\n");
@@ -186,7 +217,7 @@ void app_main(void)
             printf("LED FLASH OFF\n");
             usleep(1000000);
             ESP_LOGI(TAG, "LED FLASH");
-        }
+        }*/
     }
     
     /*esp_log_level_set("*", ESP_LOG_INFO);
