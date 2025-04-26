@@ -1,6 +1,8 @@
 dependencies:
   protocol_examples_common:
     path: ${IDF_PATH}/examples/common_components/protocol_examples_common
+  MFRC522:
+    path: /home/vectorcs/Escritorio/Master/SED/Proyecto_final/SED_Proyecto_Final/components/Componentes/MFRC522
   espressif/esp_wifi_remote:
     version: ">=0.1.12"
     rules:

@@ -17,7 +17,9 @@
 #include "esp_event.h"
 #include "esp_netif.h"
 #include "protocol_examples_common.h"
+#include "MFRC522.h"
 #include "driver/gpio.h"
+#include "driver/spi_master.h"
 #include <unistd.h>
 
 #include "esp_log.h"
@@ -50,15 +52,7 @@ static void configure_sensor(void)
     adc1_config_width(ADC_WIDTH);
     adc1_config_channel_atten(SENSOR_CHANNEL, ADC_ATTEN);
 }
-/*
-static void configure_sensor(void)
-{
-    ESP_LOGI(TAG, "Example configured to blink GPIO LED!");
-    gpio_set_level(PresenceSensor, 0);
-    //Set the GPIO as a push/pull output 
-    gpio_set_direction(PresenceSensor, GPIO_MODE_INPUT);
-}
-*/
+
 static void configure_led(void)
 {
     ESP_LOGI(TAG, "Example configured to blink GPIO LED!");
@@ -68,6 +62,61 @@ static void configure_led(void)
     gpio_set_direction(LED, GPIO_MODE_OUTPUT);
 }
 
+static spi_device_handle_t configureRFID(void)
+{
+    printf("CONFIGURANDO RFID");
+    esp_err_t ret;
+    spi_device_handle_t spi;
+    spi_bus_config_t buscfg={
+        .miso_io_num= 19,
+        .mosi_io_num=18,
+        .sclk_io_num=8,
+        .quadwp_io_num=-1,
+        .quadhd_io_num=-1
+    };
+    spi_device_interface_config_t devcfg={
+        .clock_speed_hz=5000000,               //Clock out at 5 MHz
+        .mode=0,                                //SPI mode 0
+        .spics_io_num=8,               //CS pin
+        .queue_size=7,                          //We want to be able to queue 7 transactions at a time
+        //.pre_cb=ili_spi_pre_transfer_callback,  //Specify pre-transfer callback to handle D/C line
+    };
+    //Initialize the SPI bus
+    printf("INIT BUS");
+    ret=spi_bus_initialize(SPI2_HOST, &buscfg, SPI_DMA_CH_AUTO);
+    assert(ret==ESP_OK);
+    //Attach the RFID to the SPI bus
+    printf("ADD DEVICE");
+    ret=spi_bus_add_device(SPI2_HOST, &devcfg, &spi);
+    assert(ret==ESP_OK);
+   
+    PCD_Init(spi);
+    return spi;
+}
+
+static void checkRFID(spi_device_handle_t spi)
+{
+    if(PICC_IsNewCardPresent(spi))                   //Checking for new card
+    {
+
+        printf("***card detected!***\n");
+        GetStatusCodeName(PICC_Select(spi,&uid,0));
+        PICC_DumpToSerial(spi,&uid);                  //DETAILS OF UID ALONG WITH SECTORS
+        
+        // GetStatusCodeName(PICC_RequestA(spi,req_buffer,&req_len));
+        
+        
+        //   GetStatusCodeName(PICC_Select(spi,&uid,0));
+        //   GetStatusCodeName(PCD_Authenticate(spi,PICC_CMD_MF_AUTH_KEY_A,5,&key, &(uid)));
+        //   GetStatusCodeName(MIFARE_Write(spi,4,(uint8_t*)username,16));
+        //    GetStatusCodeName(MIFARE_Write(spi,5,(uint8_t*)password,16));
+        // //  MIFARE_Read(spi,4,card_rx_buffer,&card_rx_len);
+        //   PCD_StopCrypto1(spi);
+        // ESP_LOGI(TAG,"MIFARE block %d : %s",4,(char*)card_rx_buffer);
+        vTaskDelay(100 / portTICK_PERIOD_MS);
+
+    }
+}
 
 /*
  * @brief Event handler registered to receive MQTT events
@@ -177,14 +226,17 @@ void app_main(void)
     ESP_LOGI(TAG, "[APP] Startup..");
     ESP_LOGI(TAG, "[APP] Free memory: %" PRIu32 " bytes", esp_get_free_heap_size());
     ESP_LOGI(TAG, "[APP] IDF version: %s", esp_get_idf_version());
-    configure_sensor();
-    configure_led();
-    bool Alert = false;
-    ESP_LOGI(TAG, "GPIO %d configured as input", PresenceSensor);
+    //configure_sensor();
+    //configure_led();
+    //bool Alert = false;
+    //ESP_LOGI(TAG, "GPIO %d configured as input", PresenceSensor);
+    spi_device_handle_t spi = configureRFID();
+    printf("INICIADO");
     while (true)
     {    
-
-        int analog_value = adc1_get_raw(SENSOR_CHANNEL);
+        checkRFID(spi);
+        printf("LEYENDO");
+        /*int analog_value = adc1_get_raw(SENSOR_CHANNEL);
         printf("Lectura analógica del sensor: %d\n", analog_value);
     
         if (analog_value > 1000) {  // Umbral de proximidad, puedes calibrarlo
@@ -192,7 +244,7 @@ void app_main(void)
             Alert = true;
         } else {
             Alert = false;
-        }
+        }*/
     
         // Si la lectura es mayor que el umbral, enciende el LE
         /*
@@ -218,6 +270,7 @@ void app_main(void)
             usleep(1000000);
             ESP_LOGI(TAG, "LED FLASH");
         }*/
+        vTaskDelay(500 / portTICK_PERIOD_MS);
     }
     
     /*esp_log_level_set("*", ESP_LOG_INFO);

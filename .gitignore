@@ -52,6 +52,8 @@ Mkfile.old
 dkms.conf
 
 /build*
-/.vscode*
-dependencies.lock
+.vscode/
 *.lock
+.vscode/settings.json
+dependencies.lock
+/.vscode
