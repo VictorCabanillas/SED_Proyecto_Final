@@ -3,12 +3,15 @@
     "idf.espIdfPath": "/home/gonzalo/esp/v5.4/esp-idf",
     "idf.pythonInstallPath": "/bin/python3",
     "idf.openOcdConfigs": [
-        "board/esp32c3-builtin.cfg"
+        "board/esp32-wrover-kit-3.3v.cfg"
     ],
-    "idf.port": "/dev/ttyACM0",
+    "idf.port": "/dev/ttyUSB0",
     "idf.toolsPath": "/home/gonzalo/.espressif",
-    "idf.flashType": "JTAG",
+    "idf.flashType": "UART",
     "idf.customExtraVars": {
-        "IDF_TARGET": "esp32c3"
+        "IDF_TARGET": "esp32"
+    },
+    "files.associations": {
+        "esp_timer.h": "c"
     }
 }

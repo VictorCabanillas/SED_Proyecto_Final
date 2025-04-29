@@ -1,4 +1,10 @@
 dependencies:
+  MFRC522:
+    dependencies: []
+    source:
+      path: /home/gonzalo/empotrados/SED_Proyecto_Final/components/Componentes/MFRC522
+      type: local
+    version: '*'
   idf:
     source:
       type: idf
@@ -10,7 +16,8 @@ dependencies:
       type: local
     version: '*'
 direct_dependencies:
+- MFRC522
 - protocol_examples_common
-manifest_hash: e213eefd9eb0cbc4f815bcf6aad46802487ab9c0e1d125afe3b8777b4bd72ae5
-target: esp32c3
+manifest_hash: 63663e7393d25db87f749637331b3a7cfddceb39b39a7e7e0ac91626b018db86
+target: esp32
 version: 2.0.0
