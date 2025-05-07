@@ -75,22 +75,31 @@
 
 
 static const char *TAG = "mqtt_example";
-const int PresenceSensor = 2;
-const int LED = 5;
+const int PresenceSensor = 33;
+const int LED = 17;
 
 
 
 #define BUZZER_GPIO    4  // Cambia esto por el pin que uses
 #define TONE_FREQUENCY 2000 // Frecuencia en Hz
 
-#define SENSOR_CHANNEL ADC1_CHANNEL_2  // GPIO36 (VP), por ejemplo
+#define SENSOR_CHANNEL ADC1_CHANNEL_7  /*!< ADC1 channel 7 is GPIO35 */
 #define ADC_ATTEN ADC_ATTEN_DB_11      // Para leer hasta ~3.6V
 #define ADC_WIDTH ADC_WIDTH_BIT_12     // Resolución de 12 bits (0-4095)
 #define I2C_FREQ_HZ 400000 // 400kHz
 
+volatile bool tarjeta_detectada = false;  // Bandera global
+volatile bool movimiento_detectado = false;  // Bandera global
+
 esp_mqtt_client_handle_t client;
-static void periodic_timer_callback_read(void *arg);
-static void periodic_timer_callback_read2(void *arg);
+spi_device_handle_t spi;
+static void periodic_timer_callback_sensor(void *arg);
+static void periodic_timer_callback_panel(void *arg);
+
+typedef struct {
+    spi_device_handle_t spi;
+    esp_mqtt_client_handle_t client;
+} callback_args_t;
 
 static void log_error_if_nonzero(const char *message, int error_code)
 {
@@ -146,37 +155,39 @@ static spi_device_handle_t configureRFID(void)
     esp_err_t ret;
     spi_device_handle_t spi;
     spi_bus_config_t buscfg={
-        .miso_io_num= 33,
-        .mosi_io_num=32,
-        .sclk_io_num=25,
+        .miso_io_num= 19,
+        .mosi_io_num=23,
+        .sclk_io_num=18,
         .quadwp_io_num=-1,
         .quadhd_io_num=-1
     };
     spi_device_interface_config_t devcfg={
         .clock_speed_hz=5000000,               //Clock out at 5 MHz
         .mode=0,                                //SPI mode 0
-        .spics_io_num=8,               //CS pin
+        .spics_io_num=5,               //CS pin (SDA)
         .queue_size=7,                          //We want to be able to queue 7 transactions at a time
         //.pre_cb=ili_spi_pre_transfer_callback,  //Specify pre-transfer callback to handle D/C line
     };
+    //RST a 3.3
     //Initialize the SPI bus
     printf("INIT BUS");
-    ret=spi_bus_initialize(SPI2_HOST, &buscfg, SPI_DMA_CH_AUTO);
+    ret=spi_bus_initialize(SPI3_HOST, &buscfg, SPI_DMA_CH_AUTO);
     assert(ret==ESP_OK);
     //Attach the RFID to the SPI bus
     printf("ADD DEVICE");
-    ret=spi_bus_add_device(SPI2_HOST, &devcfg, &spi);
+    ret=spi_bus_add_device(SPI3_HOST, &devcfg, &spi);
     assert(ret==ESP_OK);
    
     PCD_Init(spi);
     return spi;
 }
 
-static void checkRFID(spi_device_handle_t spi)
+static bool checkRFID(spi_device_handle_t spi)
 {
+    bool card = false;
     if(PICC_IsNewCardPresent(spi))                   //Checking for new card
     {
-
+        card = true;
         printf("***card detected!***\n");
         GetStatusCodeName(PICC_Select(spi,&uid,0));
         PICC_DumpToSerial(spi,&uid);                  //DETAILS OF UID ALONG WITH SECTORS
@@ -194,16 +205,17 @@ static void checkRFID(spi_device_handle_t spi)
         vTaskDelay(100 / portTICK_PERIOD_MS);
 
     }
+    return card;
 }
 
 
 /*
-Ambos se suscriben a /SED/VG/panel /SED/VG/sensor
+Ambos se suscriben a /SED/VG/mensajes
 Publicación de mensajes:
 "Sensor suscrito"
 "Panel suscrito"
 
-periodic_timer_callback_read --> lea el sensor de moviemiento/lea sensor de RDIF
+periodic_timer_callback_sensor --> lea el sensor de moviemiento/lea sensor de RDIF
 funcion de escribir --> publica si hay  movimiento/se pasa la tarjeta --> enciendan o apaguen los leds/zumbadores
 
 Publicación de mensajes:
@@ -221,8 +233,11 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
     {
     case MQTT_EVENT_CONNECTED:
         ESP_LOGI(TAG, "MQTT_EVENT_CONNECTED");
-        msg_id = esp_mqtt_client_subscribe(client, "/SED/VG/sensor", 0);
+        msg_id = esp_mqtt_client_subscribe(client, "/SED/VG/mensajes", 0);
         ESP_LOGI(TAG, "Sensor suscrito, msg_id=%d", msg_id);
+
+        msg_id = esp_mqtt_client_subscribe(client, "/SED/VG/mensajes", 0);
+        ESP_LOGI(TAG, "Panel suscrito, msg_id=%d", msg_id);
 
         break;
     case MQTT_EVENT_DISCONNECTED:
@@ -242,9 +257,25 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
         ESP_LOGI(TAG, "MQTT_EVENT_DATA");
         printf("TOPIC=%.*s\r\n", event->topic_len, event->topic);
         printf("DATA=%.*s\r\n", event->data_len, event->data);
-        if (strncmp(event->topic, "/SED/VG/sensor", event->topic_len) == 0)
+
+        if (strncmp(event->topic, "/SED/VG/mensajes", event->topic_len) == 0)
         {
             printf("advanced_ota_example_task\r\n");
+        }
+
+        if (strncmp(event->topic, "/SED/VG/mensajes", event->topic_len) == 0 &&
+            strncmp(event->data, "Tarjeta detectada", event->data_len) == 0)
+        {
+            tarjeta_detectada = true;
+            movimiento_detectado = false;
+            ESP_LOGI(TAG, "¡Tarjeta detectada!");
+        }
+        if (strncmp(event->topic, "/SED/VG/mensajes", event->topic_len) == 0 &&
+        strncmp(event->data, "Presencia detectada", event->data_len) == 0)
+        {
+            movimiento_detectado = true;
+            tarjeta_detectada = false;
+            ESP_LOGI(TAG, "¡Movimiento detectado!");
         }
         break;
     case MQTT_EVENT_ERROR:
@@ -276,11 +307,9 @@ void app_main(void)
     ESP_LOGI(TAG, "[APP] Startup..");
     ESP_LOGI(TAG, "[APP] Free memory: %" PRIu32 " bytes", esp_get_free_heap_size());
     ESP_LOGI(TAG, "[APP] IDF version: %s", esp_get_idf_version());
-    //configure_sensor();
-    bool Alert = false;
+    configure_sensor();
+
     ESP_LOGI(TAG, "GPIO %d configured as input", PresenceSensor);
-    //spi_device_handle_t spi = configureRFID();
-    printf("INICIADO");
     ESP_ERROR_CHECK(nvs_flash_init());
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
@@ -288,27 +317,53 @@ void app_main(void)
 
     mqtt_app_start();
     configure_led();
-    ESP_LOGI(TAG, "I2C frequency set to %dHz", I2C_FREQ_HZ);
+    configure_buzzer();
+    spi = configureRFID();
 
-    const esp_timer_create_args_t periodic_timer_args_read = {
-        .callback = periodic_timer_callback_read,
-        /* name is optional, but may help identify the timer when debugging */
-        .name = "periodicTemp1"};
-        const esp_timer_create_args_t periodic_timer_args_read2 = {
-            .callback = periodic_timer_callback_read2,
-            /* name is optional, but may help identify the timer when debugging */
-            .name = "periodicTemp2"};
     
+    
+    const esp_timer_create_args_t periodic_timer_args_read_sensor = {
+        .callback = periodic_timer_callback_sensor,
+        // name is optional, but may help identify the timer when debugging /
+        .name = "periodicTemp1"};
+    /*
+    const esp_timer_create_args_t periodic_timer_args_read_panel = {
+        .callback = periodic_timer_callback_panel,
+        // name is optional, but may help identify the timer when debugging /
+        .name = "periodicTemp2"};
+    */
     esp_timer_handle_t periodic_timer_sensor, periodic_timer_panel;
-    ESP_ERROR_CHECK(esp_timer_create(&periodic_timer_args_read, &periodic_timer_sensor));
-    ESP_ERROR_CHECK(esp_timer_create(&periodic_timer_args_read2, &periodic_timer_panel));
+    ESP_ERROR_CHECK(esp_timer_create(&periodic_timer_args_read_sensor, &periodic_timer_sensor));
+    //ESP_ERROR_CHECK(esp_timer_create(&periodic_timer_args_read_panel, &periodic_timer_panel));
 
     ESP_ERROR_CHECK(esp_timer_start_periodic(periodic_timer_sensor, 1000000));
-    ESP_ERROR_CHECK(esp_timer_start_periodic(periodic_timer_panel, 1000000));
+    //ESP_ERROR_CHECK(esp_timer_start_periodic(periodic_timer_panel, 1000000));
+    
+    
 
+    
     while (true)
     {    
+        
+        if (tarjeta_detectada) {
+            //apago el led y el buzzer
+            gpio_set_level(LED, 0);
+            ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 0);
+            ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0);
+            tarjeta_detectada = false;
+            movimiento_detectado = false;
+        }
+        
+
+        if (movimiento_detectado) {
+            //enciende el led y el buzzer
+            gpio_set_level(LED, 1);
+            ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 512); // 50%
+            ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0);
+        }
+        
         //checkRFID(spi);
+        
         /*
         printf("LEYENDO");
         int analog_value = adc1_get_raw(SENSOR_CHANNEL);
@@ -319,8 +374,8 @@ void app_main(void)
             Alert = true;
         } else {
             Alert = false;
-        }*/
-    
+        }
+        */
         // Si la lectura es mayor que el umbral, enciende el LE
         /*
         if(!Alert || true)
@@ -345,9 +400,11 @@ void app_main(void)
             usleep(1000000);
             ESP_LOGI(TAG, "LED FLASH");
         }*/
-
-        /*//BUZZER
+        
+        
+        //BUZZER
         // Activar sonido
+        /*
         ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 512); // 50%
         ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0);
         printf("BUZZER ON\n");
@@ -357,8 +414,9 @@ void app_main(void)
         ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 0);
         ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0);
         printf("BUZZER OFF\n");
-        vTaskDelay(pdMS_TO_TICKS(1000));*/
+        vTaskDelay(pdMS_TO_TICKS(1000));
         vTaskDelay(500 / portTICK_PERIOD_MS);
+        */
     }
     
     /*esp_log_level_set("*", ESP_LOG_INFO);
@@ -383,26 +441,63 @@ void app_main(void)
 }
 
 
-static void periodic_timer_callback_read(void *arg)
+/*
+static void periodic_timer_callback_panel(void *arg)
 {
+
     int64_t time_since_boot = esp_timer_get_time();
     ESP_LOGI(TAG, "Periodic timer called, time since boot: %lld us", time_since_boot);
     ESP_LOGI(TAG, "Version actualizada: %lld us", time_since_boot);
     int msg = 0;
+    //spi_device_handle_t spi = configureRFID();
+
   
-    msg = esp_mqtt_client_publish(client, "/SED/VG/sensor", "Sensor activado", 0, 1, 0);
+    msg = esp_mqtt_client_publish(client, "/SED/VG/mensajes", "Panel activado", 0, 1, 0);
     gpio_set_level(LED, 1);
+    if (newCard)
+    {
+        ESP_LOGI(TAG, "Tarjeta detectada");
+        msg = esp_mqtt_client_publish(client, "/SED/VG/mensajes", "Tarjeta detectada", 0, 1, 0);
+    }
 
 }
-
-static void periodic_timer_callback_read2(void *arg)
+*/
+/*
+static void periodic_timer_callback_sensor(void *arg)
 {
+
     int64_t time_since_boot = esp_timer_get_time();
     ESP_LOGI(TAG, "Periodic timer called, time since boot: %lld us", time_since_boot);
     ESP_LOGI(TAG, "Version actualizada: %lld us", time_since_boot);
     int msg = 0;
   
-    msg = esp_mqtt_client_publish(client, "/SED/VG/sensor", "Panel activado", 0, 1, 0);
-    gpio_set_level(LED, 1);
+    msg = esp_mqtt_client_publish(client, "/SED/VG/mensajes", "Sensor activado", 0, 1, 0);
+   
+    int analog_value = adc1_get_raw(SENSOR_CHANNEL);
+    printf("SENSOR PRESENCIA = %d\n", analog_value);
+    if(analog_value < 100){
+        ESP_LOGI(TAG, "PRESENCE DETECTED");
+        msg = esp_mqtt_client_publish(client, "/SED/VG/mensajes", "Presencia detectada", 0, 1, 0);
+
+    }
+    
+
+}
+*/
+static void periodic_timer_callback_panel(void *arg)
+{
+
+    int64_t time_since_boot = esp_timer_get_time();
+    ESP_LOGI(TAG, "Periodic timer called, time since boot: %lld us", time_since_boot);
+    ESP_LOGI(TAG, "Version actualizada: %lld us", time_since_boot);
+    int msg = 0;
+  
+    msg = esp_mqtt_client_publish(client, "/SED/VG/mensajes", "Panel activado", 0, 1, 0);
+    bool newCard = checkRFID(spi);
+    if (newCard)
+    {
+        ESP_LOGI(TAG, "Tarjeta detectada");
+        msg = esp_mqtt_client_publish(client, "/SED/VG/mensajes", "Tarjeta detectada", 0, 1, 0);
+    }
     
 }

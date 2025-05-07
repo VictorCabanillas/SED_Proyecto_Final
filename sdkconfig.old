@@ -406,7 +406,7 @@ CONFIG_PARTITION_TABLE_MD5=y
 #
 # Example Configuration
 #
-CONFIG_BROKER_URL="http://test.mosquitto.org"
+CONFIG_BROKER_URL="mqtt://test.mosquitto.org"
 # end of Example Configuration
 
 #
