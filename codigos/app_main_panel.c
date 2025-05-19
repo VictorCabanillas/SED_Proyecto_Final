@@ -349,7 +349,8 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
         strncmp(event->data, "Actualiza", event->data_len) == 0)
         {
             xTaskCreate(&simple_ota_example_task, "ota_example_task", 8192, NULL, 5, NULL);
-        
+
+            ESP_LOGI(TAG, "OTA actualizado :)");
         }
         break;
     case MQTT_EVENT_ERROR:
@@ -410,15 +411,7 @@ void app_main(void)
     //configure_sensor();
 
     ESP_LOGI(TAG, "GPIO %d configured as input", PresenceSensor);
-    esp_err_t err = nvs_flash_init();
-        if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-        // 1.OTA app partition table has a smaller NVS partition size than the non-OTA
-        // partition table. This size mismatch may cause NVS initialization to fail.
-        // 2.NVS partition contains data in new format and cannot be recognized by this version of code.
-        // If this happens, we erase NVS partition and initialize NVS again.
-        ESP_ERROR_CHECK(nvs_flash_erase());
-        err = nvs_flash_init();
-    }
+    ESP_ERROR_CHECK(nvs_flash_init());
     get_sha256_of_partitions();
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
@@ -457,7 +450,7 @@ void app_main(void)
         
         if (tarjeta_detectada) {
             //apago el led y el buzzer
-            gpio_set_level(LED, 0);
+            //gpio_set_level(LED, 0);
             ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 0);
             ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0);
             tarjeta_detectada = false;
@@ -467,7 +460,7 @@ void app_main(void)
 
         if (movimiento_detectado) {
             //enciende el led y el buzzer
-            gpio_set_level(LED, 1);
+            //gpio_set_level(LED, 1);
             ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 512); // 50%
             ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0);
         }
@@ -487,6 +480,7 @@ static void periodic_timer_callback_sensor(void *arg)
     ESP_LOGI(TAG, "Version actualizada: %lld us", time_since_boot);
     int msg = 0;
   
+    msg = esp_mqtt_client_publish(client, "/SED/VG/mensajes", "Sensor activado", 0, 1, 0);
    
     int analog_value = adc1_get_raw(SENSOR_CHANNEL);
     printf("SENSOR PRESENCIA = %d\n", analog_value);
@@ -497,8 +491,8 @@ static void periodic_timer_callback_sensor(void *arg)
     }
 
 }
-
 */
+
 static void periodic_timer_callback_panel(void *arg)
 {
 
@@ -507,6 +501,7 @@ static void periodic_timer_callback_panel(void *arg)
     ESP_LOGI(TAG, "Version actualizada: %lld us", time_since_boot);
     int msg = 0;
   
+    //msg = esp_mqtt_client_publish(client, "/SED/VG/mensajes", "Panel activado", 0, 1, 0);
     bool newCard = checkRFID(spi);
     if (newCard)
     {
