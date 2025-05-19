@@ -406,7 +406,11 @@ CONFIG_PARTITION_TABLE_MD5=y
 #
 # Example Configuration
 #
-CONFIG_BROKER_URL="mqtt://test.mosquitto.org"
+CONFIG_BROKER_URL="mqtt://broker.hivemq.com"
+CONFIG_EXAMPLE_FIRMWARE_UPGRADE_URL="https://192.168.0.3:8070/hello_world.bin"
+CONFIG_EXAMPLE_USE_CERT_BUNDLE=y
+# CONFIG_EXAMPLE_SKIP_COMMON_NAME_CHECK is not set
+# CONFIG_EXAMPLE_FIRMWARE_UPGRADE_BIND_IF is not set
 # end of Example Configuration
 
 #
