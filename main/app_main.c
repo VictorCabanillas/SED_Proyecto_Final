@@ -407,9 +407,9 @@ void app_main(void)
     ESP_LOGI(TAG, "[APP] Startup..");
     ESP_LOGI(TAG, "[APP] Free memory: %" PRIu32 " bytes", esp_get_free_heap_size());
     ESP_LOGI(TAG, "[APP] IDF version: %s", esp_get_idf_version());
-    //configure_sensor();
-
+    configure_sensor();
     ESP_LOGI(TAG, "GPIO %d configured as input", PresenceSensor);
+    /*
     esp_err_t err = nvs_flash_init();
         if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
         // 1.OTA app partition table has a smaller NVS partition size than the non-OTA
@@ -423,30 +423,31 @@ void app_main(void)
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
     ESP_ERROR_CHECK(example_connect());
-    esp_wifi_set_ps(WIFI_PS_NONE);
+    esp_wifi_set_ps(WIFI_PS_NONE);*/
 
-    mqtt_app_start();
+    //mqtt_app_start();
     configure_led();
     configure_buzzer();
     spi = configureRFID();
 
     
-    /*
+    
     const esp_timer_create_args_t periodic_timer_args_read_sensor = {
         .callback = periodic_timer_callback_sensor,
         // name is optional, but may help identify the timer when debugging /
         .name = "periodicTemp1"};
-    */
+
     const esp_timer_create_args_t periodic_timer_args_read_panel = {
         .callback = periodic_timer_callback_panel,
         // name is optional, but may help identify the timer when debugging /
         .name = "periodicTemp2"};
     
     esp_timer_handle_t periodic_timer_sensor, periodic_timer_panel;
-    //ESP_ERROR_CHECK(esp_timer_create(&periodic_timer_args_read_sensor, &periodic_timer_sensor));
+    
+    ESP_ERROR_CHECK(esp_timer_create(&periodic_timer_args_read_sensor, &periodic_timer_sensor));
     ESP_ERROR_CHECK(esp_timer_create(&periodic_timer_args_read_panel, &periodic_timer_panel));
 
-    //ESP_ERROR_CHECK(esp_timer_start_periodic(periodic_timer_sensor, 1000000));
+    ESP_ERROR_CHECK(esp_timer_start_periodic(periodic_timer_sensor, 1000000));
     ESP_ERROR_CHECK(esp_timer_start_periodic(periodic_timer_panel, 1000000));
     
     
@@ -472,13 +473,13 @@ void app_main(void)
             ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0);
         }
         
-        
+        vTaskDelay(1000 / portTICK_PERIOD_MS);
     }
     
 }
 
 
-/*
+
 static void periodic_timer_callback_sensor(void *arg)
 {
 
@@ -492,13 +493,14 @@ static void periodic_timer_callback_sensor(void *arg)
     printf("SENSOR PRESENCIA = %d\n", analog_value);
     if(analog_value < 100){
         ESP_LOGI(TAG, "PRESENCE DETECTED");
-        msg = esp_mqtt_client_publish(client, "/SED/VG/mensajes", "Presencia detectada", 0, 1, 0);
-
+        //msg = esp_mqtt_client_publish(client, "/SED/VG/mensajes", "Presencia detectada", 0, 1, 0);
+        movimiento_detectado = true;
+        vTaskDelay(1000 / portTICK_PERIOD_MS);
     }
 
 }
 
-*/
+
 static void periodic_timer_callback_panel(void *arg)
 {
 
@@ -511,7 +513,9 @@ static void periodic_timer_callback_panel(void *arg)
     if (newCard)
     {
         ESP_LOGI(TAG, "Tarjeta detectada");
-        msg = esp_mqtt_client_publish(client, "/SED/VG/mensajes", "Tarjeta detectada", 0, 1, 0);
+        //msg = esp_mqtt_client_publish(client, "/SED/VG/mensajes", "Tarjeta detectada", 0, 1, 0);
+        tarjeta_detectada = true;
+        vTaskDelay(1000 / portTICK_PERIOD_MS);
     }
     
 }
