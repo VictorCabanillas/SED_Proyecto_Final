@@ -46,22 +46,13 @@ const int LED = 17;
 volatile bool tarjeta_detectada = false;  // Bandera global
 volatile bool movimiento_detectado = false;  // Bandera global
 
-esp_mqtt_client_handle_t client;
 spi_device_handle_t spi;
 static void periodic_timer_callback_sensor(void *arg);
 static void periodic_timer_callback_panel(void *arg);
 
 typedef struct {
     spi_device_handle_t spi;
-    esp_mqtt_client_handle_t client;
 } callback_args_t;
-
-static void log_error_if_nonzero(const char *message, int error_code)
-{
-    if (error_code != 0) {
-        ESP_LOGE(TAG, "Last error %s: 0x%x", message, error_code);
-    }
-}
 
 static void configure_sensor(void)
 {
@@ -167,7 +158,7 @@ void app_main(void)
 
     //Inicializar sensor proximidad
     configure_sensor();
-    ESP_LOGI(TAG, "GPIO %d configured as input", PresenceSensor);
+    ESP_LOGI(TAG, "GPIO %d configured as input", SENSOR_CHANNEL);
 
     //Inicializar  led y buzzer
     configure_led();
@@ -232,9 +223,7 @@ static void periodic_timer_callback_sensor(void *arg)
 
     int64_t time_since_boot = esp_timer_get_time();
     ESP_LOGI(TAG, "Periodic timer called, time since boot: %lld us", time_since_boot);
-    ESP_LOGI(TAG, "Version actualizada: %lld us", time_since_boot);
-    int msg = 0;
-  
+    ESP_LOGI(TAG, "Version actualizada: %lld us", time_since_boot);  
    
     int analog_value = adc1_get_raw(SENSOR_CHANNEL);
     printf("SENSOR PRESENCIA = %d\n", analog_value);
@@ -254,7 +243,6 @@ static void periodic_timer_callback_panel(void *arg)
     int64_t time_since_boot = esp_timer_get_time();
     ESP_LOGI(TAG, "Periodic timer called, time since boot: %lld us", time_since_boot);
     ESP_LOGI(TAG, "Version actualizada: %lld us", time_since_boot);
-    int msg = 0;
   
     bool newCard = checkRFID(spi);
     if (newCard)
