@@ -2,22 +2,22 @@ dependencies:
   MFRC522:
     dependencies: []
     source:
-      path: /home/vectorcs/Escritorio/Master/SED/Proyecto_final/SED_Proyecto_Final/components/Componentes/MFRC522
+      path: C:\Users\Usuario\Desktop\Cosas de Victor\Master\SED\PracticaFinal\SED_Proyecto_Final\components\Componentes\MFRC522
       type: local
     version: '*'
   idf:
     source:
       type: idf
-    version: 5.4.1
+    version: 5.4.0
   protocol_examples_common:
     dependencies: []
     source:
-      path: /home/vectorcs/esp/v5.4.1/esp-idf/examples/common_components/protocol_examples_common
+      path: C:\Users\Usuario\esp\v5.4\esp-idf\examples\common_components\protocol_examples_common
       type: local
     version: '*'
 direct_dependencies:
 - MFRC522
 - protocol_examples_common
-manifest_hash: 742e05720a220fb965ed34b445939869582855e1fe264dfa3b84b7851fb29d70
+manifest_hash: b7ac8b8b4ff4c01408affb5a403e6f911082f0ba2301744ea3a07688ff2e2d56
 target: esp32
 version: 2.0.0
